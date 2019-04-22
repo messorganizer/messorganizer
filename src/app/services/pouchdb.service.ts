@@ -6,7 +6,7 @@ import { Observable } from 'rxjs';
 import { PouchDbAdapter } from './pouchdb.adapter';
 
 // TODO extract into a config file / option
-const COUCHDB_BASEURL = 'http://127.0.0.1:5984/mess';
+const COUCHDB_BASEURL = '127.0.0.1:5984/mess';
 
 @Injectable({
   providedIn: 'root'
@@ -37,7 +37,11 @@ export class PouchdbService {
   }
 
   post(doc): Promise<any> {
-    return Promise.resolve(this._pouchDbAdapter.post(doc));
+    return this._pouchDbAdapter.post(doc);
+  }
+
+  replicateTo(): Promise<any> {
+    return this._pouchDbAdapter.replicateToCouchDB();
   }
 
 }

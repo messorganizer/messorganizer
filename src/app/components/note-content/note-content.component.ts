@@ -15,19 +15,18 @@ export class NoteContentComponent {
   constructor(public pouchDb: PouchdbService) {
     console.log('Hello NoteContentComponent Component');
     this.noteText = 'Hello World';
+    this.addNote();
   }
 
   addNote() {
     let remoteCouch = false;
     let note: Note = new Note();
 
-    note.id = "note." + new Date().toISOString();
-    note.text = this.value;
-    // let note = {
-    //   "_id": "note." + new Date().toISOString(),
-    //   "type": "note",
-    //   "content": text,
-    // };
+    note = {
+      "_id": "note." + new Date().toISOString(),
+      "type": "note",
+      "content": "bla",
+    };
     console.log(note);
     this.pouchDb.post(note);
     // db.put(note, function callback(err, result) {
