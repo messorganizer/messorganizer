@@ -9,13 +9,12 @@ import { PouchdbService } from '../../services/pouchdb.service';
 })
 export class NoteContentComponent {
 
+  noteId: string;
+  noteRev: string;
   noteText: string;
-  value: string;
 
   constructor(public pouchDb: PouchdbService) {
-    console.log('Hello NoteContentComponent Component');
-    this.noteText = 'Hello World';
-    this.addNote();
+    console.log('Displaying note content');
   }
 
   addNote() {
@@ -29,11 +28,9 @@ export class NoteContentComponent {
     };
     console.log(note);
     this.pouchDb.post(note);
-    // db.put(note, function callback(err, result) {
-    //   if (!err) {
-    //     console.log('SUCCESS: Added note.');
-    //   }
-    // });
   }
 
+  updateNote(note) {
+    this.pouchDb.put(note);
+  }
 }

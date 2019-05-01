@@ -40,8 +40,15 @@ export class PouchdbService {
     return this._pouchDbAdapter.post(doc);
   }
 
+  put(doc): Promise<any> {
+    return this._pouchDbAdapter.put(doc);
+  }
+
   replicateTo(): Promise<any> {
     return this._pouchDbAdapter.replicateToCouchDB();
   }
 
+  replicateFromAndSync(): Promise<any> {
+    return this._pouchDbAdapter.replicateFromCouchDBAndSync();
+  }
 }

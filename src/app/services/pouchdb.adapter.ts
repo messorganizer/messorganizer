@@ -21,6 +21,14 @@ export class PouchDbAdapter {
     syncStatus = new BehaviorSubject<boolean>(false);
     couchDbUp = new BehaviorSubject<boolean>(false);
 
+    changeSyncStatus(value: boolean) {
+        this.syncStatus.next(value);
+    }
+
+    changeUpStatus(value: boolean) {
+        this.couchDbUp.next(value);
+    }
+
     constructor(couchDBBaseURL: string) {
         // TODO extract credentials into a config file / option
         this._username = 'dev';
@@ -38,7 +46,7 @@ export class PouchDbAdapter {
         this._pouchDB = new PouchDB(this._pouchDbName);
         this._couchDB = new PouchDB(this._couchDBURL);
 
-        this.replicateFromCouchDB();
+        this.replicateFromCouchDBAndSync();
     }
 
     destroyPouchDB(): Promise<any> {
@@ -58,8 +66,7 @@ export class PouchDbAdapter {
         return new Promise(resolve => {
             this._couchDB.logIn(this._username, this._password)
                 .then(user => {
-                    console.log('Login to CouchDB ok');
-                    console.log(user);
+                    console.log('Login to CouchDB ok as ' + this._username);
                     resolve(true);
                 })
                 .catch(error => {
@@ -84,88 +91,101 @@ export class PouchDbAdapter {
         });
     }
 
-    replicateFromCouchDB(): Promise<any> {
-        return new Promise(resolve => {
-            this.loginCouchDB()
-                .then(result => {
-                    return this._pouchDB.replicate.from(this._couchDB, {
-                        live: true,
-                        retry: true,
-                        query_params: {
-                            'auth.username': this._username,
-                            'auth.password': this._password
-                        }
-                    }).on('change', function (info) {
-                        console.log('change detected in CouchDB');
-                    }).on('paused', function (error) {
-                        // replication paused (e.g. replication up to date, user went offline)
-                        console.log('replication paused');
-                    }).on('active', function () {
-                        // replicate resumed (e.g. new changes replicating, user went back online)
-                        console.log('replication resumed');
-                    }).on('denied', function (error) {
-                        // a document failed to replicate (e.g. due to permissions)
-                        console.log('document failed to replicate FROM CouchDB');
-                        console.log(error);
-                    }).on('complete', function (info) {
-                        console.log('replication FROM CouchDB complete');
-                    }).on('error', function (error) {
-                        console.log('error replicating FROM CouchDB');
-                        console.log(error);
-                    });
+    replicateFromCouchDBAndSync(): Promise<any> {
+        return this.loginCouchDB()
+            .then(result => {
+                return this._pouchDB.replicate.from(this._couchDB, {
+                    live: false,
+                    retry: true,
+                    query_params: {
+                        'auth.username': this._username,
+                        'auth.password': this._password
+                    }
                 })
-                .catch(error => {
-                    console.log('Could not login to replicate FROM CouchDB');
-                    console.log(error);
-                });
-        })
+                    .on('change', this.onSyncChange)
+                    .on('paused', this.onSyncPaused)
+                    .on('active', this.onSyncActive)
+                    .on('denied', this.onSyncDenied)
+                    .on('complete', this.onSyncCompleteLaunchTwoWaySync)
+                    .on('error', this.onSyncError);
+            })
             .catch(error => {
-                console.log('Error replicating FROM CouchDB');
+                console.log('Could not replicate FROM CouchDB');
                 console.log(error);
             });
     }
 
     replicateToCouchDB(): Promise<any> {
-        return new Promise(resolve => {
-            this.loginCouchDB()
-                .then(result => {
-                    console.log(this._pouchDB);
-
-                    return this._pouchDB.replicate.to(this._couchDB, {
-                        live: true,
-                        retry: true,
-                        query_params: {
-                            'auth.username': this._username,
-                            'auth.password': this._password
-                        }
-                    }).on('change', function (info) {
-                        console.log('change detected in pouchDB');
-                    }).on('paused', function (error) {
-                        // replication paused (e.g. replication up to date, user went offline)
-                        console.log('replication paused');
-                    }).on('active', function () {
-                        // replicate resumed (e.g. new changes replicating, user went back online)
-                        console.log('replication resumed');
-                    }).on('denied', function (error) {
-                        // a document failed to replicate (e.g. due to permissions)
-                        console.log('document failed to replicate TO CouchDB');
-                        console.log(error);
-                    }).on('complete', function (info) {
-                        console.log('replication FROM CouchDB complete');
-                    }).on('error', function (error) {
-                        console.log('error replicating TO CouchDB');
-                        console.log(error);
-                    });
+        return this.loginCouchDB()
+            .then(result => {
+                return this._pouchDB.replicate.to(this._couchDB, {
+                    live: true,
+                    retry: true,
+                    query_params: {
+                        'auth.username': this._username,
+                        'auth.password': this._password
+                    }
                 })
-                .catch(error => {
-                    console.log('Could not login to replicate TO CouchDB');
-                    console.log(error);
-                });
-        })
+                    .on('change', this.onSyncChange)
+                    .on('paused', this.onSyncPaused)
+                    .on('active', this.onSyncActive)
+                    .on('denied', this.onSyncDenied)
+                    .on('complete', this.onSyncComplete)
+                    .on('error', this.onSyncError);
+            })
             .catch(error => {
-                console.log('Error replicating FROM CouchDB');
+                console.log('Could not login to replicate TO CouchDB');
                 console.log(error);
             });
+    }
+
+    onSyncChange(info): void {
+        console.log('change detected');
+    }
+
+    onSyncPaused(error): void {
+        // replication paused (e.g. replication up to date, user went offline)
+        console.log('replication paused');
+        if (error) {
+            console.log(error);
+        }
+    }
+
+    onSyncActive(): void {
+        // replicate resumed (e.g. new changes replicating, user went back online)
+        console.log('replication resumed');
+    }
+
+    onSyncDenied(error) {
+        // a document failed to replicate (e.g. due to permissions)
+        console.log('document failed to replicate');
+        console.log(error);
+    }
+
+    onSyncError(error): void {
+        console.log('error replicating');
+        console.log(error);
+    }
+
+    onSyncComplete(): void {
+        console.log('replication complete');
+    }
+
+    onSyncCompleteLaunchTwoWaySync(): void {
+        console.log('replication complete');
+        console.log('starting 2-way sync');
+        this.twoWaySync();
+    }
+
+    twoWaySync(): void {
+        var opts = { live: true, retry: true };
+        this._pouchDB.sync(this._couchDBURL, opts)
+            .on('change', this.onSyncChange)
+            .on('paused', this.onSyncPaused)
+            .on('active', this.onSyncActive)
+            .on('denied', this.onSyncDenied)
+            .on('complete', this.onSyncComplete)
+            .on('error', this.onSyncError);
     }
 
     // pretty basic and crude function
@@ -190,7 +210,18 @@ export class PouchDbAdapter {
             this._pouchDB.post(doc)
                 .then((response => {
                     console.log('document created in pouchDB');
-                    this.replicateToCouchDB();
+                }))
+                .catch((error) => {
+                    console.log(error);
+                });
+        });
+    }
+
+    put(doc): Promise<any> {
+        return new Promise(resolve => {
+            this._pouchDB.put(doc)
+                .then((response => {
+                    console.log('document updated in pouchDB');
                 }))
                 .catch((error) => {
                     console.log(error);
@@ -214,7 +245,7 @@ export class PouchDbAdapter {
 
     // part of the JSON returned by PouchDB from the info() method
     // is 'update_seq'. When these numbers are equal then the databases
-    // are in sync. The way its buried in the JSON means some string
+    // are in twoWaySync. The way its buried in the JSON means some string
     // functions are required to extract it
     private checkPouchCouchSync(): Promise<boolean> {
         // if both objects exist then make a Promise from both their
